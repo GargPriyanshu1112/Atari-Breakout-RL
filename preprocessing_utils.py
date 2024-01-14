@@ -1,8 +1,4 @@
-# Import dependencies
-import gym
 import tensorflow as tf
-
-import matplotlib.pyplot as plt
 
 
 class ImageTransformer:
@@ -18,21 +14,3 @@ class ImageTransformer:
         img = tf.squeeze(img)
         assert img.shape == (IMG_SIZE, IMG_SIZE)
         return img
-
-
-if __name__ == "__main__":
-    print(tf.__version__)
-    # Initialize the Breakout environment
-    env = gym.make(
-        id="ALE/Breakout-v5",
-        full_action_space=False,
-        repeat_action_probability=0.1,
-        obs_type="rgb",
-    )
-    start_state, info = env.reset()
-
-    # print(start_state.shape)
-    # print(info)
-
-    imgT = ImageTransformer()
-    imgT.transform(start_state)
