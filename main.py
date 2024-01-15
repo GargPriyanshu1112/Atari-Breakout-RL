@@ -69,7 +69,8 @@ if __name__ == "__main__":
     BATCH_SIZE = 32
     NUM_EPISODES = 3500
     REPLAY_BUFFER_SIZE = 500000
-    MIN_BUFFER_SIZE = 50000  # min buffer size before commencing training
+    MIN_BUFFER_SIZE = 50000  # minimum buffer size before commencing training
+    MIN_STEPS_BEFORE_TARGET_UPDATE = 10000 # minimum steps before we update the target model's weights 
     EPSILON = 1.0
     EPSILON_MIN = 0.1
 
