@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 from image_transformer import ImageTransformer
 from dqn import DQN
-from replay_buffer import ReplayBuffer
+from replay_memory import ReplayMemory
 
 state_history = []
 action_history = []
@@ -66,8 +66,9 @@ def play_episode(
 
 if __name__ == "__main__":
     GAMMA = 0.99
-    BATCH_SIZE = 32
+    BATCH_SIZE = 32 ??
     NUM_EPISODES = 3500
+    IMG_SIZE = 84
     REPLAY_BUFFER_SIZE = 500000
     MIN_BUFFER_SIZE = 50000  # minimum buffer size before commencing training
     MIN_STEPS_BEFORE_TARGET_UPDATE = 10000 # minimum steps before we update the target model's weights 
@@ -76,8 +77,8 @@ if __name__ == "__main__":
 
     base_model = DQN()
     target_model = DQN()
-    img_transformer = ImageTransformer()
-    replay_buffer = ReplayBuffer()
+    img_transformer = ImageTransformer(IMG_SIZE)
+    replay_buffer = ReplayMemory(REPLAY_BUFFER_SIZE, IMG_SIZE, IMG_SIZE, BATCH_SIZE)
 
     # Initialize the Breakout environment
     env = gym.make(
