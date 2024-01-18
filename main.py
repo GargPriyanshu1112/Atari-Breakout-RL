@@ -22,6 +22,16 @@ frame_count = 0
 TARGET_UPDATE_PERIOD = None
 
 if __name__ == "__main__":
+    # Initialize the Breakout environment
+    env = gym.make(
+        id="ALE/Breakout-v5",
+        full_action_space=False,
+        repeat_action_probability=0.1,
+        obs_type="rgb",
+    )
+    env.reset()
+
+    NUM_ACTIONS = env.action_space.n
     GAMMA = 0.99
     BATCH_SIZE = 32
     NUM_EPISODES = 3500
@@ -36,21 +46,12 @@ if __name__ == "__main__":
     EPS = 1.0
     EPS_MIN = 0.1
 
-    base_model = DQN()
-    target_model = DQN()
+    base_network = DQN(NUM_ACTIONS)
+    target_network = DQN(NUM_ACTIONS)
     img_transformer = ImageTransformer(IMG_H, IMG_W)
-    replay_buffer = ReplayMemory(
+    replay_memory = ReplayMemory(
         REPLAY_BUFFER_SIZE, IMG_H, IMG_W, BATCH_SIZE, NUM_STACKED_FRAMES
     )
-
-    # Initialize the Breakout environment
-    env = gym.make(
-        id="ALE/Breakout-v5",
-        full_action_space=False,
-        repeat_action_probability=0.1,
-        obs_type="rgb",
-    )
-    env.reset()
 
     # Populate replay buffer with episodes of completely random actions
     for _ in range(
@@ -59,7 +60,7 @@ if __name__ == "__main__":
         action = np.random.choice(env.action_space.n)
         frame, reward, terminated, truncated, _ = env.step(action)
         processed_frame = img_transformer.transform(frame)
-        replay_buffer.add_experience(
+        replay_memory.add_experience(
             action, processed_frame, reward, terminated or truncated
         )
 
@@ -73,9 +74,9 @@ if __name__ == "__main__":
         duration, loss, episode_reward, num_episode_steps, total_steps = play_episode(
             env,
             img_transformer,
-            base_model,
-            target_model,
-            replay_buffer,
+            base_network,
+            target_network,
+            replay_memory,
             total_steps,
             BATCH_SIZE,
             NUM_STACKED_FRAMES,

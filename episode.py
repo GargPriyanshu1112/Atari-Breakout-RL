@@ -1,4 +1,4 @@
-from time import time
+import time
 import numpy as np
 
 """Loop through each step of episode until it reach done flagl..."""
@@ -6,11 +6,15 @@ TARGET_UPDATE_PERIOD = 10000  # # make it  class parameter....
 
 
 def update_state(state, obs):
+    print(np.append(state[:, :, 1:], np.expand_dims(obs, axis=-1), axis=-1).shape)
     return np.append(state[:, :, 1:], np.expand_dims(obs, axis=-1), axis=-1)
 
 
-def learn(base_model, target_model, replay_buffer, gamma, batch_size):  # check dims
+def learn(base_model, target_model, replay_buffer, gamma):  # check dims
     states, actions, rewards, next_states, done_flags = replay_buffer.get_batch()
+    print(
+        states.shape, actions.shape, rewards.shape, next_states.shape, done_flags.shape
+    )
 
     # Get the target
     pred_Qs = target_model.predict(next_states)  # why target model??
@@ -34,7 +38,7 @@ def play_episode(
     eps=1.0,
     eps_min=0.1,
 ):
-    start_time = time.start()
+    start_time = time.time()
 
     obs, _ = env.reset()
     obs = img_transformer.transform(obs)
@@ -47,7 +51,7 @@ def play_episode(
         # Update target network
         if num_total_steps % TARGET_UPDATE_PERIOD == 0:
             print(f"Copying base model parameters to the target model...")
-            target_model.copy_weights(base_model)
+            target_model.copy_weights(base_model.model)
 
         action = base_model.sample_action(state, eps)
         obs, reward, terminated, truncated, _ = env.step(action)
@@ -61,7 +65,7 @@ def play_episode(
         replay_buffer.add_experience(action, obs, reward, terminated or truncated)
 
         # Train
-        loss = learn(base_model, target_model, replay_buffer, gamma, batch_size)
+        loss = learn(base_model, target_model, replay_buffer, gamma)
 
         state = next_state
         episode_reward += reward
@@ -69,7 +73,7 @@ def play_episode(
         num_episode_steps += 1
         num_total_steps += 1
 
-        end_time = time.end()
+        end_time = time.time()
         duration = end_time - start_time
 
         eps = max(eps_min, eps - eps_change)

@@ -53,16 +53,16 @@ class DQN:
         )  # perhaps will create a problem in future,
 
 
-dqn1 = DQN(4)
-dqn2 = DQN(4)
-# dqn1.copy_from(dqn2.model)
-import gym
+# dqn1 = DQN(4)
+# dqn2 = DQN(4)
+# dqn1.copy_weights(dqn2.model)
+# import gym
 
-env = gym.make(
-    id="ALE/Breakout-v5",
-    full_action_space=False,
-    repeat_action_probability=0.1,
-    obs_type="rgb",
-)
-obs, _ = env.reset()
-print(dqn1.sample_action(np.expand_dims(obs, axis=0)))
+# env = gym.make(
+#     id="ALE/Breakout-v5",
+#     full_action_space=False,
+#     repeat_action_probability=0.1,
+#     obs_type="rgb",
+# )
+# obs, _ = env.reset()
+# print(dqn1.sample_action(np.expand_dims(obs, axis=0)))
