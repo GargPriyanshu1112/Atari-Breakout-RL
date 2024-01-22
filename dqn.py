@@ -7,7 +7,7 @@ from keras.losses import Huber
 
 
 class DQN:
-    def __init__(self, num_actions, inp_shape=(210, 160, 3), lr=1e-5):
+    def __init__(self, num_actions, inp_shape, lr=1e-5):
         model = Sequential()
         model.add(Input(shape=inp_shape))
         model.add(Conv2D(32, kernel_size=(8, 8), strides=(4, 4), activation="relu"))
@@ -20,15 +20,6 @@ class DQN:
         self.model = model
         self.num_actions = num_actions
         self.optimizer = Adam(learning_rate=lr)
-
-    def predict(self, states):
-        return self.model(states)  # returns p(a| s)
-
-    def sample_action(self, state, eps):
-        if np.random.random() < eps:
-            return np.random.choice(self.num_actions)
-        else:
-            return np.argmax(self.predict(state))
 
     def loss_fn(self, action_probs, actions, targets):
         estimated_qvals = tf.reduce_sum(
@@ -47,10 +38,17 @@ class DQN:
         )
         return loss
 
+    def predict(self, states):
+        return self.model(states)  # returns p(a| s)
+
+    def sample_action(self, state, eps):
+        if np.random.random() < eps:
+            return np.random.choice(self.num_actions)
+        else:
+            return np.argmax(self.predict(state))
+
     def copy_weights(self, base_model):
-        self.model.set_weights(
-            base_model.get_weights()
-        )  # perhaps will create a problem in future,
+        self.model.set_weights(base_model.get_weights())
 
 
 # dqn1 = DQN(4)

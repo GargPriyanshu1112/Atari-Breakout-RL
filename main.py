@@ -19,8 +19,6 @@ episode_count = 0
 frame_count = 0
 
 
-TARGET_UPDATE_PERIOD = None
-
 if __name__ == "__main__":
     # Initialize the Breakout environment
     env = gym.make(
@@ -46,8 +44,10 @@ if __name__ == "__main__":
     EPS = 1.0
     EPS_MIN = 0.1
 
-    base_network = DQN(NUM_ACTIONS)
-    target_network = DQN(NUM_ACTIONS)
+    INP_SHAPE = (IMG_H, IMG_W, NUM_STACKED_FRAMES)
+
+    base_network = DQN(NUM_ACTIONS, INP_SHAPE)
+    target_network = DQN(NUM_ACTIONS, INP_SHAPE)
     img_transformer = ImageTransformer(IMG_H, IMG_W)
     replay_memory = ReplayMemory(
         REPLAY_BUFFER_SIZE, IMG_H, IMG_W, BATCH_SIZE, NUM_STACKED_FRAMES
@@ -67,18 +67,17 @@ if __name__ == "__main__":
         if terminated or truncated:
             env.reset()
 
-    total_steps = 0
+    step_count = 0
     rewards_per_episode = []
-    # Play episodes and learn...
-    for i in range(NUM_EPISODES):  # ??
-        duration, loss, episode_reward, num_episode_steps, total_steps = play_episode(
+    # Play episodes
+    for i in range(NUM_EPISODES):
+        duration, loss, episode_reward, num_episode_steps, step_count = play_episode(
             env,
-            img_transformer,
             base_network,
             target_network,
+            img_transformer,
             replay_memory,
-            total_steps,
-            BATCH_SIZE,
+            step_count,
             NUM_STACKED_FRAMES,
             GAMMA,
             EPS,
@@ -86,7 +85,7 @@ if __name__ == "__main__":
         )
 
         print(
-            f"episode {i+1} | duration: {duration} sec. | loss: {loss} | reward: {episode_reward} | steps: {num_episode_steps}"
+            f"episode {i+1} | duration: {duration} sec. | loss: {loss} | reward: {episode_reward} | steps: {step_count}"
         )
 
         rewards_per_episode.append(episode_reward)

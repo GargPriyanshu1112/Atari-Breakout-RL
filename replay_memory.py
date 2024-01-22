@@ -21,7 +21,7 @@ class ReplayMemory:
         self.batch_size = batch_size
         self.num_stacked_frames = num_stacked_frames
         self.buffer_pos = 0
-        self.count = 0
+        # self.count = 0
 
         # Pre-allocate memory for replay buffer
         self.actions = np.empty(buffer_size, dtype=np.int32)
@@ -44,16 +44,16 @@ class ReplayMemory:
         self.frames[self.buffer_pos] = frame
         self.rewards[self.buffer_pos] = reward
         self.terminal_flags[self.buffer_pos] = done
-        self.count = max(
-            self.count, self.buffer_pos + 1
-        )  # use and why this weird method...??
         self.buffer_pos = (self.buffer_pos + 1) % self.buffer_size  # circular insertion
+        # self.count = max(
+        #     self.count, self.buffer_pos + 1
+        # )  # use and why this weird method...??
 
     def get_valid_indices(self):
-        """helper function to sample a batch"""
+        """Helper function to sample a batch"""
         for i in range(self.batch_size):
             while True:
-                idx = random.randint(self.num_stacked_frames, self.count - 1)
+                idx = random.randint(self.num_stacked_frames, self.batch_size - 1)  # ch
 
                 if self.terminal_flags[idx - self.num_stacked_frames : idx].any():
                     continue
