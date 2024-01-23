@@ -20,13 +20,19 @@ class DQN:
         self.model = model
         self.num_actions = num_actions
         self.optimizer = Adam(learning_rate=lr)
+        self.huber_loss = Huber()
 
     def loss_fn(self, action_probs, actions, targets):
+        # print(f"action_probs.shape: {action_probs.shape}")
         estimated_qvals = tf.reduce_sum(
             tf.multiply(action_probs, tf.one_hot(actions, depth=self.num_actions)),
             axis=1,
         )
-        loss = Huber(targets, estimated_qvals)
+        # print(f"estimated_qvals.shape: {estimated_qvals.shape}")
+        # print(targets, estimated_qvals)
+        loss = self.huber_loss(targets, estimated_qvals)
+        # print(f"loss.shape: {loss.shape}")
+        # print(f"loss: {loss}")
         return loss
 
     def update(self, states, actions, targets):

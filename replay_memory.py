@@ -21,41 +21,45 @@ class ReplayMemory:
         self.batch_size = batch_size
         self.num_stacked_frames = num_stacked_frames
         self.buffer_pos = 0
-        # self.count = 0
+        self.count = 0
 
         # Pre-allocate memory for replay buffer
         self.actions = np.empty(buffer_size, dtype=np.int32)
         self.rewards = np.empty(buffer_size, dtype=np.float32)
         self.frames = np.empty((buffer_size, frame_h, frame_w), dtype=np.float32)
-        self.terminal_flags = np.empty(buffer_size, dtype=np.bool_)
+        self.done_flags = np.empty(buffer_size, dtype=np.bool_)
 
         # Pre-allocate memory for a minibatch
         self.states = np.empty(
             (batch_size, num_stacked_frames, frame_h, frame_w), dtype=np.float32
         )
-        self.new_states = np.empty(
+        self.next_states = np.empty(
             (batch_size, num_stacked_frames, frame_h, frame_w), dtype=np.float32
         )
         self.indices = np.empty(batch_size, dtype=np.int32)
 
-    def add_experience(self, action, frame, reward, done):
+    def add_experience(self, action, frame, reward, done_flag):
         assert frame.shape == (self.h, self.w)
         self.actions[self.buffer_pos] = action
         self.frames[self.buffer_pos] = frame
         self.rewards[self.buffer_pos] = reward
-        self.terminal_flags[self.buffer_pos] = done
-        self.buffer_pos = (self.buffer_pos + 1) % self.buffer_size  # circular insertion
-        # self.count = max(
-        #     self.count, self.buffer_pos + 1
-        # )  # use and why this weird method...??
+        self.done_flags[self.buffer_pos] = done_flag
+
+        # Update counter
+        self.count = max(
+            self.count, self.buffer_pos + 1
+        )  # use and why this weird method...??
+
+        # Update current buffer position.
+        self.buffer_pos = (self.buffer_pos + 1) % self.buffer_size
 
     def get_valid_indices(self):
         """Helper function to sample a batch"""
         for i in range(self.batch_size):
             while True:
-                idx = random.randint(self.num_stacked_frames, self.batch_size - 1)  # ch
+                idx = random.randint(self.num_stacked_frames, self.count - 1)
 
-                if self.terminal_flags[idx - self.num_stacked_frames : idx].any():
+                if self.done_flags[idx - self.num_stacked_frames : idx].any():
                     continue
                 elif (
                     idx >= self.buffer_pos
@@ -73,17 +77,17 @@ class ReplayMemory:
         return self.frames[frame_idx + 1 - self.num_stacked_frames : frame_idx + 1, ...]
 
     def get_batch(self):
-        """Returns a batch of self.batch_size transitions."""
+        """Returns a batch of state transitions."""
         self.get_valid_indices()
 
         for i, idx in enumerate(self.indices):
             self.states[i] = self.get_state(idx - 1)  # ??
-            self.new_states[i] = self.get_state(idx)  # ??
+            self.next_states[i] = self.get_state(idx)  # ??
 
         return (
             np.transpose(self.states, axes=[0, 2, 3, 1]),
-            self.actions,
-            self.rewards,
-            np.transpose(self.new_states, axes=[0, 2, 3, 1]),
-            self.terminal_flags,
+            self.actions[self.indices],  ##
+            self.rewards[self.indices],  ##
+            np.transpose(self.next_states, axes=[0, 2, 3, 1]),
+            self.done_flags[self.indices],  ##
         )

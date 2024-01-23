@@ -7,17 +7,6 @@ from dqn import DQN
 from replay_memory import ReplayMemory
 from episode import play_episode
 
-state_history = []
-action_history = []
-reward_history = []
-next_state_history = []
-done_history = []
-
-episode_reward_history = []
-running_reward = 0
-episode_count = 0
-frame_count = 0
-
 
 if __name__ == "__main__":
     # Initialize the Breakout environment
@@ -37,7 +26,7 @@ if __name__ == "__main__":
     IMG_W = 84
     NUM_STACKED_FRAMES = 4  # no. of frames stacked together to make up one state
     REPLAY_BUFFER_SIZE = 500000
-    MIN_BUFFER_SIZE = 50000  # minimum buffer size before commencing training
+    MIN_BUFFER_SIZE = 50000  # minimum buffer size before commencing training 00
     MIN_STEPS_BEFORE_TARGET_UPDATE = (
         10000  # minimum steps before we update the target model's weights
     )
@@ -58,11 +47,9 @@ if __name__ == "__main__":
         MIN_BUFFER_SIZE
     ):  # ?? min buffer size or REPLAT_BUFFER SIZE?? ---- why random ????
         action = np.random.choice(env.action_space.n)
-        frame, reward, terminated, truncated, _ = env.step(action)
-        processed_frame = img_transformer.transform(frame)
-        replay_memory.add_experience(
-            action, processed_frame, reward, terminated or truncated
-        )
+        obs, reward, terminated, truncated, _ = env.step(action)
+        frame = img_transformer.transform(obs)
+        replay_memory.add_experience(action, frame, reward, terminated or truncated)
 
         if terminated or truncated:
             env.reset()
@@ -85,7 +72,7 @@ if __name__ == "__main__":
         )
 
         print(
-            f"episode {i+1} | duration: {duration} sec. | loss: {loss} | reward: {episode_reward} | steps: {step_count}"
+            f"episode {i+1} | episode duration: {duration} sec. | loss: {loss} | reward: {episode_reward} | steps: {step_count}"
         )
 
         rewards_per_episode.append(episode_reward)
