@@ -1,8 +1,7 @@
 import time
 import numpy as np
 
-"""Loop through each step of episode until it reach done flagl..."""
-TARGET_UPDATE_PERIOD = 10000  # # make it  class parameter....
+TARGET_UPDATE_PERIOD = 10000  # steps after which we update the target model's weights
 
 
 def get_new_state(state, obs):
@@ -10,14 +9,14 @@ def get_new_state(state, obs):
     return np.append(state[:, :, 1:], np.expand_dims(obs, axis=-1), axis=-1)
 
 
-def learn(base_network, target_network, replay_memory, gamma):  # check dims
+def learn(base_network, target_network, replay_memory, gamma):
     states, actions, rewards, next_states, done_flags = replay_memory.get_batch()
     # print(
     #     states.shape, actions.shape, rewards.shape, next_states.shape, done_flags.shape
     # )
 
     # Get the target
-    pred_Qs = target_network.predict(next_states)  # why target model??
+    pred_Qs = target_network.predict(next_states)
     # print(f"pred_Qs shape: {pred_Qs.shape}")
     maxQs = np.max(pred_Qs, axis=1)
     # print(f"maxQs shape: {maxQs.shape}")
@@ -42,9 +41,12 @@ def play_episode(
 ):
     start_time = time.time()
 
+    # Get initial episode state
     obs, _ = env.reset()
     frame = img_transformer.transform(obs)
-    state = np.stack([frame] * num_stacked_frames, axis=2)
+    state = np.stack([frame] * num_stacked_frames, axis=-1)  # 2
+    # print(state.shape)
+    assert state.ndim == 3
 
     done = False
     episode_reward = 0

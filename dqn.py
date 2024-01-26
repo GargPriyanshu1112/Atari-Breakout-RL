@@ -45,28 +45,14 @@ class DQN:
         return loss
 
     def predict(self, states):
+        # print(states.shape)
         return self.model(states)  # returns p(a| s)
 
     def sample_action(self, state, eps):
         if np.random.random() < eps:
             return np.random.choice(self.num_actions)
         else:
-            return np.argmax(self.predict(state))
+            return np.argmax(self.predict(np.expand_dims(state, axis=0)))  #
 
     def copy_weights(self, base_model):
         self.model.set_weights(base_model.get_weights())
-
-
-# dqn1 = DQN(4)
-# dqn2 = DQN(4)
-# dqn1.copy_weights(dqn2.model)
-# import gym
-
-# env = gym.make(
-#     id="ALE/Breakout-v5",
-#     full_action_space=False,
-#     repeat_action_probability=0.1,
-#     obs_type="rgb",
-# )
-# obs, _ = env.reset()
-# print(dqn1.sample_action(np.expand_dims(obs, axis=0)))

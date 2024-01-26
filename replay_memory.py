@@ -2,10 +2,6 @@ import numpy as np
 import random
 
 
-# Pre-allocate all of the frames we plan on storing and then we can sample
-# states from the individual frames later on.
-
-
 class ReplayMemory:
     def __init__(
         self,
@@ -39,18 +35,14 @@ class ReplayMemory:
         self.indices = np.empty(batch_size, dtype=np.int32)
 
     def add_experience(self, action, frame, reward, done_flag):
-        assert frame.shape == (self.h, self.w)
         self.actions[self.buffer_pos] = action
         self.frames[self.buffer_pos] = frame
         self.rewards[self.buffer_pos] = reward
         self.done_flags[self.buffer_pos] = done_flag
 
         # Update counter
-        self.count = max(
-            self.count, self.buffer_pos + 1
-        )  # use and why this weird method...??
-
-        # Update current buffer position.
+        self.count = max(self.count, self.buffer_pos + 1)
+        # Update current buffer position
         self.buffer_pos = (self.buffer_pos + 1) % self.buffer_size
 
     def get_valid_indices(self):
@@ -86,8 +78,8 @@ class ReplayMemory:
 
         return (
             np.transpose(self.states, axes=[0, 2, 3, 1]),
-            self.actions[self.indices],  ##
-            self.rewards[self.indices],  ##
+            self.actions[self.indices],
+            self.rewards[self.indices],
             np.transpose(self.next_states, axes=[0, 2, 3, 1]),
-            self.done_flags[self.indices],  ##
+            self.done_flags[self.indices],
         )
