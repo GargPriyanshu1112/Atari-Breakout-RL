@@ -1,3 +1,6 @@
+"""
+When to close env...
+"""
 # Import dependencies
 import gym
 import itertools
