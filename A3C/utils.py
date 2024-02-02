@@ -1,35 +1,31 @@
+import gym
 import numpy as np
 
-from config import Config
+from config import NUM_STACKED_FRAMES
 
 
+# Returns Breakout environment
+def get_breakout_env():
+    return gym.make(
+        id="ALE/Breakout-v5",
+        full_action_space=False,
+        repeat_action_probability=0.1,
+        obs_type="rgb",
+    )
+
+
+# Creates initial state by repeating the first frame 'NUM_STACKED_FRAMES' times
 def repeat_frame(frame):
-    return np.stack([frame] * Config.NUM_STACKED_FRAMES, axis=-1)
+    return np.stack([frame] * NUM_STACKED_FRAMES, axis=-1)
 
 
+# Returns next state by shifting each frame by 1. Removes the oldest frame from
+# the state and concatenates the latest frame to its other end.
 def get_next_state(state, frame):
     return np.append(state[:, :, 1:], np.expand_dims(frame, axis=-1), axis=-1)
 
 
-def get_networks():
-    """
-    Returns Policy and Value model.
-    """
-    pass
-
-
-def copy_params():
-    """
-    Copies params from global model to worker model (only the base layers ??)
-    """
-
-
-def update_weights():
-    """
-    Updates
-    """
-
-
+# Class that stores data related to each step in the environment
 class Step:
     def __init__(self, current_state, action, reward, next_state, done_flag):
         self.current_state = current_state
