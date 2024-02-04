@@ -46,7 +46,8 @@ if __name__ == "__main__":
         t.start()
         worker_threads.append(t)
 
-    ##
+    ###
+    # Wait for all workers to finish
     coordinator.join(
         worker_threads, stop_grace_period_secs=300
     )  # raises error if threads don't terminate within 5 minutes

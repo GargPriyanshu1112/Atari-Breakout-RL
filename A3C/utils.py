@@ -27,8 +27,8 @@ def get_next_state(state, frame):
 
 # Class that stores data related to each step in the environment
 class Step:
-    def __init__(self, current_state, action, reward, next_state, done_flag):
-        self.current_state = current_state
+    def __init__(self, state, action, reward, next_state, done_flag):
+        self.state = state
         self.action = action
         self.reward = reward
         self.next_state = next_state

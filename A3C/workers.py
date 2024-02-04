@@ -42,52 +42,40 @@ class Worker:
             self.global_policy_network.model.get_weights()
         )
 
-    def update_global_weights(self, states, actions, advantages, value_targets):
+    def update_global_weights(
+        self, states, actions, advantages, value_targets
+    ):  # TODO: Clip gradients
         """Updates weights of global value and policy models with gradients from the worker counterparts."""
-        # Get gradients and the corresponding weights of worker value model
-        worker_vmodel_grads = self.worker_value_network.get_gradients(
+        # Get worker value model's trainable weights and corresponding gradients
+        worker_value_model_weights = self.worker_value_network.model.trainable_weights
+        worker_value_model_grads = self.worker_value_network.get_gradients(
             states, value_targets
         )
-        worker_vmodel_trainable_weights = (
-            self.worker_value_network.model.trainable_weights
-        )
-
-        # Apply gradients
+        # Update global value network's weights
         self.global_value_network.optimizer.apply_gradients(
-            zip(worker_vmodel_grads, worker_vmodel_trainable_weights)
+            zip(worker_value_model_grads, worker_value_model_weights)
         )
 
-        # Get gradients and the corresponding weights of worker policy model
-        worker_pmodel_grads = self.worker_policy_network.get_gradients(
-            states, value_targets
+        # Get worker policy model's trainable weights and corresponding gradients
+        worker_policy_model_weights = self.worker_policy_network.model.trainable_weights
+        worker_policy_model_grads = self.worker_policy_network.get_gradients(
+            states, actions, advantages
         )
-        worker_pmodel_trainable_weights = (
-            self.worker_policy_network.model.trainable_weights
-        )
-
-        # Apply gradients
+        # Update global policy network's weights
         self.global_policy_network.optimizer.apply_gradients(
-            zip(worker_pmodel_grads, worker_pmodel_trainable_weights)
+            zip(worker_policy_model_grads, worker_policy_model_weights)
         )
-
-        # update weights using these gradients...
-        # if loss needed, perhaps it is better to make function that does it all (with
-        # its implementaion in the nets.py)
-        # in the code perhaps we are taking gradiets and updating weights of the final dense layer as well
 
     def sample_action(self, state):
-        self.worker_policy_network.get_logits(state)
-        pass  # incomplete
-
-    def get_value_estimate(self, state):
-        return self.worker_value_network.predict(state)
+        action = self.worker_policy_network.sample_action(np.array(state))
+        return action
 
     def run_n_steps(self, n):
         steps_data = []
+        # Take n steps
         for _ in range(n):
-            # Take a step
-            action = self.sample_action(np.expand_dims(self.state, axis=0))
-            # check where this works or should we use sample_action() ---------------------------
+            action = self.sample_action([self.state])
+
             obs, reward, terminated, truncated, _ = self.env.step(action)
             next_state = get_next_state(self.state, self.img_transformer.transform(obs))
 
@@ -137,11 +125,14 @@ class Worker:
             # Update global networks'  weights using local networks' gradients -----
             self.update(steps_data)
 
+    def get_value_estimate(self, state):
+        return self.worker_value_network.predict(np.array(state))
+
     def update(self, steps_data):  # recheck the flow
         value_estimate = 0.0
         if not steps_data[-1].done_flag:  # if the episode hasn't ended
             # Get expected sum of all future rewards
-            value_estimate = self.get_value_estimate(steps_data[-1].next_state)
+            value_estimate = self.get_value_estimate([steps_data[-1].next_state])
 
         states = []
         actions = []
@@ -151,16 +142,15 @@ class Worker:
         # Loop through steps in reverse order
         for step_data in reversed(steps_data):
             return_ = step_data.reward + self.discount_factor * value_estimate
-            advantage = return_ - self.get_value_estimate(step_data.state)
+            advantage = return_ - self.get_value_estimate([step_data.state])
+            value_estimate = return_
 
             states.append(step_data.state)
             actions.append(step_data.action)
             advantages.append(advantage)
             value_targets.append(return_)
 
-            value_estimate = return_
-
-            self.update_global_weights(states, actions, advantages, value_targets)
+        self.update_global_weights(np.array(states), actions, advantages, value_targets)
 
         """
         Updates global policy and value networks using the local network's gradients.

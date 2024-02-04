@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_probability as tfp
 from keras.models import Sequential, Model
 from keras.layers import Input, Rescaling, Conv2D, Flatten, Dense
 from keras.optimizers import RMSprop
@@ -28,20 +29,19 @@ class ValueNetwork:
         self.optimizer = RMSprop(0.00025, 0.99, 0.0, 1e-6)  # check from paper
 
     def predict(self, states):
-        return self.model(states)  # see dim
+        return tf.squeeze(self.model(states))
 
-    def loss_fn(self, preds, targets):
-        loss = None  # (squared error)..
-        return loss
+    def loss_fn(self, targets, preds):
+        losses = tf.math.squared_difference(targets, preds)
+        return tf.reduce_sum(losses)
 
-    def get_gradients(self, states, targets):  # change
+    def get_gradients(self, states, targets):
         with tf.GradientTape() as t:
             preds = self.predict(states)
             loss = self.loss_fn(preds, targets)
         # Derive gradients
         gradients = t.gradient(loss, self.model.trainable_weights)
         return gradients
-        # return zip(gradients, self.model.trainable_weights)
 
 
 class PolicyNetwork:
@@ -58,29 +58,43 @@ class PolicyNetwork:
         assert states.ndim == 4
         return self.model(states)
 
-    def get_probs(self, states):
-        return tf.nn.softmax(self.get_logits(states))
-
     def sample_action(self, state):
-        pass
+        logits = self.get_logits(state)
+        distibution = tfp.distributions.Categorical(logits=logits)  # READ
+        action = distibution.sample()[0]
+        return action
 
-    def loss_func(self, states):
-        probs = self.get_probs(states)  # p(a| s)
-        entropy = probs * tf.log(probs)  # reduce sum why
-        selected_action_probs = None  # ??
-        advantages = None  # ??
-        # Calculate loss
-        loss = None  # from notes...
+    def get_probs(self, states, actions):  # TODO
+        action_probs = tf.nn.softmax(self.get_logits(states))
+        return tf.reduce_sum(
+            tf.multiply(action_probs, tf.one_hot(actions, depth=4)),
+            axis=1,
+        )
+
+    def loss_fn(self, action_probs, advantages):  # TODO
+        H = -tf.reduce_sum(action_probs * tf.math.log(action_probs))
+        C = self.reg_const
+        Lp = -tf.reduce_sum(tf.multiply(advantages, tf.math.log(action_probs)))
+        loss = Lp + C * H
         return loss
+        # print(f"log: {tf.math.log(action_probs)}")
+        # print(f"advaf: {advantages}")
+        # print(tf.multiply(tf.math.log(action_probs), advantages))
+        # print(tf.math.log(action_probs) * advantages)
+        # Lp = advantages tf.math.log(action_probs)
 
-    def get_gradients(self, states, actions, advantages):  # change
+    def get_gradients(self, states, actions, advantages):  # TODO
+        # print("#######################################")
+        # print(states.shape)
+        # print(actions.shape)
+        # print(advantages.shape)
+        # print("#######################################")
         with tf.GradientTape() as t:
-            x = self.get_probs(states)
-            loss = self.loss_fn()
+            action_probs = self.get_probs(states, actions)  # p(a| s)
+            loss = self.loss_fn(action_probs, advantages)
         # Derive gradients
         gradients = t.gradient(loss, self.model.trainable_weights)
         return gradients
-        # return zip(gradients, self.model.trainable_weights)
 
 
 def get_networks(inp_shape, num_actions):  # are parameters actually shared ?
