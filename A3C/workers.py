@@ -150,7 +150,9 @@ class Worker:
             advantages.append(advantage)
             value_targets.append(return_)
 
-        self.update_global_weights(np.array(states), actions, advantages, value_targets)
+        self.update_global_weights(
+            np.array(states), actions, np.array(advantages), value_targets
+        )
 
         """
         Updates global policy and value networks using the local network's gradients.

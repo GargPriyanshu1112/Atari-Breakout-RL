@@ -65,33 +65,27 @@ class PolicyNetwork:
         return action
 
     def get_probs(self, states, actions):  # TODO
-        action_probs = tf.nn.softmax(self.get_logits(states))
-        return tf.reduce_sum(
-            tf.multiply(action_probs, tf.one_hot(actions, depth=4)),
-            axis=1,
-        )
+        return tf.nn.softmax(self.get_logits(states))
 
-    def loss_fn(self, action_probs, advantages):  # TODO
-        H = -tf.reduce_sum(action_probs * tf.math.log(action_probs))
+    def loss_fn(self, action_probs, selected_action_probs, advantages):  # TODO
         C = self.reg_const
-        Lp = -tf.reduce_sum(tf.multiply(advantages, tf.math.log(action_probs)))
-        loss = Lp + C * H
+        H = -tf.reduce_sum(action_probs * tf.math.log(action_probs), axis=1)
+        Lp = -(advantages * tf.math.log(selected_action_probs))
+        loss = tf.reduce_sum(Lp + C * H)
         return loss
-        # print(f"log: {tf.math.log(action_probs)}")
-        # print(f"advaf: {advantages}")
-        # print(tf.multiply(tf.math.log(action_probs), advantages))
-        # print(tf.math.log(action_probs) * advantages)
-        # Lp = advantages tf.math.log(action_probs)
 
     def get_gradients(self, states, actions, advantages):  # TODO
-        # print("#######################################")
-        # print(states.shape)
-        # print(actions.shape)
-        # print(advantages.shape)
-        # print("#######################################")
         with tf.GradientTape() as t:
             action_probs = self.get_probs(states, actions)  # p(a| s)
-            loss = self.loss_fn(action_probs, advantages)
+            selected_action_probs = tf.reduce_sum(
+                tf.multiply(action_probs, tf.one_hot(actions, depth=4)), axis=1
+            )
+            # print(f"action_probs: {action_probs.shape}")
+            # print(f"selected_action_probs: {selected_action_probs.shape}")
+            # print(f"selected_action_probs: {selected_action_probs}")
+            # print(f"advantages: {advantages.shape}")
+            # print(f"advantages: {advantages}")
+            loss = self.loss_fn(action_probs, selected_action_probs, advantages)
         # Derive gradients
         gradients = t.gradient(loss, self.model.trainable_weights)
         return gradients
@@ -102,3 +96,9 @@ def get_networks(inp_shape, num_actions):  # are parameters actually shared ?
     value_network = ValueNetwork(inp_shape, shared_layers)
     policy_network = PolicyNetwork(inp_shape, num_actions, shared_layers)
     return value_network, policy_network
+
+
+# if __name__ == "__main__":
+#     v, p = get_networks((84, 84, 4), 4)
+#     print(v.model.layers[1].get_weights() is p.model.layers[1].get_weights())
+#     print(v.model.layers[1].get_weights() == p.model.layers[1].get_weights())

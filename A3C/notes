@@ -102,3 +102,30 @@ Here we created an Actor-network by deriving from keras.module class. Our Actor-
 
 The critic network is created by deriving from keras.module class. Our Critic network holds three dense layers. The last one is used to output the Q-value. The critic network takes the state value as input and outputs the respective Q-value.
 """
+
+
+
+
+"""
+def loss_fn(self, action_probs, selected_action_probs, advantages):  # TODO
+        C = self.reg_const
+        H = -tf.reduce_sum(action_probs * tf.math.log(action_probs), axis=1)
+        Lp = -(advantages * tf.math.log(selected_action_probs))
+        # print(f"value fo Lp: {Lp}")
+        loss = tf.reduce_sum(Lp + C * H)
+        # print(f"loss: {loss}")
+
+        # print(f"Shape of H: {H.shape}")
+        # print(
+        #     f"multiplication: {tf.matmul(action_probs, tf.transpose(tf.math.log(action_probs))).shape}"
+        # )
+
+        # print(f"djlfjsf: {(advantages * tf.math.log(selected_action_probs)).shape}")
+
+        # # print(f"log: {tf.math.log(action_probs)}")
+        # print(f"advaf: {advantages}")
+        # print(tf.multiply(tf.math.log(action_probs), advantages))
+        # print(tf.math.log(action_probs) * advantages)
+        # # Lp = advantages tf.math.log(action_probs)
+        return loss
+"""
