@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 from image_transformer import ImageTransformer
 from networks import get_networks
@@ -42,28 +43,29 @@ class Worker:
             self.global_policy_network.model.get_weights()
         )
 
-    def update_global_weights(
-        self, states, actions, advantages, value_targets
-    ):  # TODO: Clip gradients
+    def update_global_weights(self, states, actions, advantages, value_targets):
         """Updates weights of global value and policy models with gradients from the worker counterparts."""
-        # Get worker value model's trainable weights and corresponding gradients
-        worker_value_model_weights = self.worker_value_network.model.trainable_weights
-        worker_value_model_grads = self.worker_value_network.get_gradients(
-            states, value_targets
-        )
-        # Update global value network's weights
+        with tf.GradientTape() as t:
+            preds = self.worker_value_network.predict(states)
+            loss = self.worker_value_network.loss_fn(value_targets, preds)
+        gradients = t.gradient(loss, self.worker_value_network.model.trainable_weights)
+        gradients, _ = tf.clip_by_global_norm(gradients, 5.0)  # gradient clipping
         self.global_value_network.optimizer.apply_gradients(
-            zip(worker_value_model_grads, worker_value_model_weights)
+            zip(gradients, self.global_value_network.model.trainable_weights)
         )
 
-        # Get worker policy model's trainable weights and corresponding gradients
-        worker_policy_model_weights = self.worker_policy_network.model.trainable_weights
-        worker_policy_model_grads = self.worker_policy_network.get_gradients(
-            states, actions, advantages
-        )
-        # Update global policy network's weights
+        with tf.GradientTape() as t:
+            action_probs = self.worker_policy_network.get_probs(states)  # p(a| s)
+            selected_action_probs = tf.reduce_sum(
+                tf.multiply(action_probs, tf.one_hot(actions, depth=4)), axis=1
+            )
+            loss = self.worker_policy_network.loss_fn(
+                action_probs, selected_action_probs, advantages
+            )
+        gradients = t.gradient(loss, self.worker_policy_network.model.trainable_weights)
+        gradients, _ = tf.clip_by_global_norm(gradients, 5.0)  # gradient clipping
         self.global_policy_network.optimizer.apply_gradients(
-            zip(worker_policy_model_grads, worker_policy_model_weights)
+            zip(gradients, self.global_policy_network.model.trainable_weights)
         )
 
     def sample_action(self, state):
@@ -106,24 +108,31 @@ class Worker:
                 self.state = next_state
         return steps_data, num_global_steps
 
-    def run(self, coordinator, steps_before_update):  # try block not impl, check flow
+    def run(
+        self, coordinator, steps_before_update
+    ):  # TODO: check try block, FIXME: threads not stopping...
         # Start state
         self.state = repeat_frame(self.img_transformer.transform(self.env.reset()[0]))
         assert self.state.ndim == 3  # state.shape == (84, 84, 4)
 
-        while not coordinator.should_stop():
-            # Copy weights from global value and policy models to the worker counterparts
-            self.copy_global_weights()
+        try:
+            while not coordinator.should_stop():
+                # Copy weights from global value and policy models to the worker counterparts
+                self.copy_global_weights()
 
-            # Collect experience
-            steps_data, num_global_steps = self.run_n_steps(steps_before_update)
+                # Collect experience
+                steps_data, num_global_steps = self.run_n_steps(steps_before_update)
 
-            if num_global_steps >= self.max_steps:
-                coordinator.request_stop()
-                return  # see if threads are properly joined, cloesd------------
+                if num_global_steps >= self.max_steps:
+                    coordinator.request_stop()
+                    return
 
-            # Update global networks'  weights using local networks' gradients -----
-            self.update(steps_data)
+                # Update global networks'  weights using local networks' gradients -----
+                self.update(steps_data)
+        # except (tf.errors.CancelledError, KeyboardInterrupt):  # check
+        except Exception as e:
+            print(f"Exception: {e}")
+            return
 
     def get_value_estimate(self, state):
         return self.worker_value_network.predict(np.array(state))
@@ -172,4 +181,12 @@ class Worker:
                  G(s2) = r2 + r3 + V(s4)
                  G(s1) = r1 + r2 + r3 + V(s4)
 
+        """
+
+        """
+        Exception: 'The optimizer cannot recognize variable conv2d_2/kernel:0. 
+        This usually means you are trying to call the optimizer to update different
+          parts of the model separately. Please call `optimizer.build(variables)` with
+            the full list of trainable variables before the training loop or use 
+            legacy optimizer `tf.keras.optimizers.legacy.RMSprop.'
         """
