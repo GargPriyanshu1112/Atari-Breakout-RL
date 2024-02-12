@@ -4,8 +4,6 @@ from keras.models import Sequential, Model
 from keras.layers import Input, Rescaling, Conv2D, Flatten, Dense
 from keras.optimizers import RMSprop
 
-from config import INP_SHAPE, NUM_ACTIONS
-
 
 def get_shared_layers():
     return Sequential(
@@ -26,7 +24,7 @@ class ValueNetwork:
         outputs = Dense(units=1)(x)
 
         self.model = Model(inputs=inputs, outputs=outputs)
-        self.optimizer = RMSprop(0.00025, 0.99, 0.0, 1e-6)  # check from paper
+        self.optimizer = RMSprop(0.00025, 0.99, 0.0, 1e-6)
         self.optimizer.build(self.model.trainable_weights)
 
     def predict(self, states):
@@ -44,22 +42,21 @@ class PolicyNetwork:
         outputs = Dense(units=num_actions)(x)
 
         self.model = Model(inputs=inputs, outputs=outputs)
-        self.optimizer = RMSprop(0.00025, 0.99, 0.0, 1e-6)  # check from paper
         self.reg_const = reg_const  # regularization constant
+        self.optimizer = RMSprop(0.00025, 0.99, 0.0, 1e-6)
         self.optimizer.build(self.model.trainable_weights)
 
     def get_logits(self, states):
-        assert states.ndim == 4
         return self.model(states)
+
+    def get_probs(self, states):
+        return tf.nn.softmax(self.get_logits(states))
 
     def sample_action(self, state):
         logits = self.get_logits(state)
         distibution = tfp.distributions.Categorical(logits=logits)  # READ
         action = distibution.sample()[0]
         return action
-
-    def get_probs(self, states):
-        return tf.nn.softmax(self.get_logits(states))
 
     def loss_fn(self, action_probs, selected_action_probs, advantages):
         C = self.reg_const
@@ -74,9 +71,3 @@ def get_networks(inp_shape, num_actions):
     value_network = ValueNetwork(inp_shape, shared_layers)
     policy_network = PolicyNetwork(inp_shape, num_actions, shared_layers)
     return value_network, policy_network
-
-
-# if __name__ == "__main__":
-#     v, p = get_networks((84, 84, 4), 4)
-#     print(v.model.layers[1].get_weights() is p.model.layers[1].get_weights())
-#     print(v.model.layers[1].get_weights() == p.model.layers[1].get_weights())

@@ -23,13 +23,3 @@ def repeat_frame(frame):
 # the state and concatenates the latest frame to its other end.
 def get_next_state(state, frame):
     return np.append(state[:, :, 1:], np.expand_dims(frame, axis=-1), axis=-1)
-
-
-# Class that stores data related to each step in the environment
-class Step:
-    def __init__(self, state, action, reward, next_state, done_flag):
-        self.state = state
-        self.action = action
-        self.reward = reward
-        self.next_state = next_state
-        self.done_flag = done_flag

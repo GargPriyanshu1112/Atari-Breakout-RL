@@ -4,6 +4,7 @@ When to close env...
 
 import itertools
 import threading
+import multiprocessing
 import tensorflow as tf
 
 from networks import get_networks
@@ -11,7 +12,6 @@ from workers import Worker
 from config import (
     INP_SHAPE,
     NUM_ACTIONS,
-    NUM_WORKERS,
     DISCOUNT_FACTOR,
     MAX_STEPS,
     STEPS_BEFORE_UPDATE,
@@ -27,7 +27,7 @@ if __name__ == "__main__":
     coordinator = tf.train.Coordinator()  # threads coordinator
 
     workers = []
-    for worker_id in range(NUM_WORKERS):
+    for worker_id in range(multiprocessing.cpu_count()):
         worker = Worker(
             f"worker_#{worker_id+1}",
             steps_counter,

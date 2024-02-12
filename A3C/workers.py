@@ -3,7 +3,8 @@ import tensorflow as tf
 
 from image_transformer import ImageTransformer
 from networks import get_networks
-from utils import get_breakout_env, repeat_frame, get_next_state, Step
+from utils import get_breakout_env, repeat_frame, get_next_state
+from step import Step
 from config import INP_SHAPE, NUM_ACTIONS
 
 
@@ -69,8 +70,7 @@ class Worker:
         )
 
     def sample_action(self, state):
-        action = self.worker_policy_network.sample_action(np.array(state))
-        return action
+        return self.worker_policy_network.sample_action(np.array(state))
 
     def run_n_steps(self, n):
         steps_data = []
@@ -84,7 +84,7 @@ class Worker:
             if terminated or truncated:  # if episode ends
                 print(f"Episode Reward: {self.episode_reward} - {self.name}")
                 self.returns_list.append(self.episode_reward)
-                self.episode_reward = 0
+                self.episode_reward = 0  # reset
                 if len(self.returns_list) % 100 == 0:
                     print(
                         f"\nAvg. reward (last 100 episodes): {np.mean(self.returns_list[-100:])}\n"
@@ -108,9 +108,8 @@ class Worker:
                 self.state = next_state
         return steps_data, num_global_steps
 
-    def run(
-        self, coordinator, steps_before_update
-    ):  # TODO: check try block, FIXME: threads not stopping...
+    # TODO: stop threads, return to main function if `KeyboardInterrupt` occurs
+    def run(self, coordinator, steps_before_update):
         # Start state
         self.state = repeat_frame(self.img_transformer.transform(self.env.reset()[0]))
         assert self.state.ndim == 3  # state.shape == (84, 84, 4)
@@ -127,32 +126,38 @@ class Worker:
                     coordinator.request_stop()
                     return
 
-                # Update global networks'  weights using local networks' gradients -----
+                # Update global value and policy models' weights using worker counterparts' gradients
                 self.update(steps_data)
-        # except (tf.errors.CancelledError, KeyboardInterrupt):  # check
-        except Exception as e:
-            print(f"Exception: {e}")
+
+        except tf.errors.CancelledError:
             return
 
     def get_value_estimate(self, state):
         return self.worker_value_network.predict(np.array(state))
 
-    def update(self, steps_data):  # recheck the flow
-        value_estimate = 0.0
+    def update(self, steps_data):
         if not steps_data[-1].done_flag:  # if the episode hasn't ended
-            # Get expected sum of all future rewards
-            value_estimate = self.get_value_estimate([steps_data[-1].next_state])
+            # Expected sum of all future rewards
+            V_s_prime = self.get_value_estimate([steps_data[-1].next_state])
+        else:  # if the episode has ended
+            V_s_prime = 0.0
 
         states = []
         actions = []
         advantages = []
         value_targets = []
 
+        """
+        If we have s1, s2, s3 with rewards r1, r2, r3
+        Then,  G(s3) = r3 + V(s4)
+               G(s2) = r2 + r3 + V(s4)        (= r2 + G(s3))
+               G(s1) = r1 + r2 + r3 + V(s4)   (= r1 + G(s2))
+        """
         # Loop through steps in reverse order
         for step_data in reversed(steps_data):
-            return_ = step_data.reward + self.discount_factor * value_estimate
+            return_ = step_data.reward + self.discount_factor * V_s_prime
             advantage = return_ - self.get_value_estimate([step_data.state])
-            value_estimate = return_
+            V_s_prime = return_
 
             states.append(step_data.state)
             actions.append(step_data.action)
@@ -162,31 +167,3 @@ class Worker:
         self.update_global_weights(
             np.array(states), actions, np.array(advantages), value_targets
         )
-
-        """
-        Updates global policy and value networks using the local network's gradients.
-        This function will build up the inputs and targets for our neural networks...
-        For each step we need,
-        - state (s) : inp into both the p and v networks
-        - value target: G
-        - policy loss:
-            - pi(a| s)
-            - advantage = G - V(s)
-
-        In order to accumulate the toal return, we will use V_hat(s') to predict the future returns
-        But we will use the actual rewards if we have them.
-        E.g.
-            If we have s1, s2, s3 with rewards r1,r2, r3
-            Then G(s3) = r3 + V(s4)
-                 G(s2) = r2 + r3 + V(s4)
-                 G(s1) = r1 + r2 + r3 + V(s4)
-
-        """
-
-        """
-        Exception: 'The optimizer cannot recognize variable conv2d_2/kernel:0. 
-        This usually means you are trying to call the optimizer to update different
-          parts of the model separately. Please call `optimizer.build(variables)` with
-            the full list of trainable variables before the training loop or use 
-            legacy optimizer `tf.keras.optimizers.legacy.RMSprop.'
-        """
