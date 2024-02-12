@@ -59,10 +59,12 @@ class PolicyNetwork:
         return action
 
     def loss_fn(self, action_probs, selected_action_probs, advantages):
-        C = self.reg_const
-        H = -tf.reduce_sum(action_probs * tf.math.log(action_probs), axis=1)
+        # Policy loss
         Lp = -(advantages * tf.math.log(selected_action_probs))
-        loss = tf.reduce_sum(Lp + C * H)
+        # Entropy
+        H = -tf.reduce_sum(action_probs * tf.math.log(action_probs), axis=1)
+        # Regularize the policy loss (encourages exploration)
+        loss = tf.reduce_sum(Lp + self.reg_const * H)
         return loss
 
 
