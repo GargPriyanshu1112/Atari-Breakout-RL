@@ -12,7 +12,7 @@ def get_shared_layers():
             Conv2D(16, kernel_size=(8, 8), strides=(4, 4), activation="relu"),
             Conv2D(32, kernel_size=(4, 4), strides=(2, 2), activation="relu"),
             Flatten(),
-            Dense(units=256),
+            Dense(units=256, activation="relu"),
         ]
     )
 

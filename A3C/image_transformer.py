@@ -14,7 +14,6 @@ class ImageTransformer:
             size=(self.h, self.w),
             method=tf.image.ResizeMethod.NEAREST_NEIGHBOR,
         )
-        img = tf.cast(img, dtype=tf.float32) / 255.0
         img = tf.squeeze(img)
         assert img.shape == (self.h, self.w)
         return img
