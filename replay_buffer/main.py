@@ -1,48 +1,48 @@
 # Import dependencies
 import gym
 import numpy as np
-import tensorflow as tf
 from image_transformer import ImageTransformer
 from dqn import DQN
 from replay_memory import ReplayMemory
 from episode import play_episode
-from plot_utils import plot_results
+from utils import smooth, plot_results
 
 
 if __name__ == "__main__":
+    # https://www.gymlibrary.dev/environments/atari/index.html
     # Initialize the Breakout environment
-    env = gym.make(
-        id="ALE/Breakout-v5",
-        full_action_space=False,
-        repeat_action_probability=0.1,
-        obs_type="rgb",
-    )
+    env = gym.make("Breakout-v0")
     env.reset()
 
     NUM_ACTIONS = env.action_space.n
+    assert NUM_ACTIONS == 4
+
+    H = 84  # frame height
+    W = 84  # frame width
+    NUM_STACKED_FRAMES = 4  # no. of frames stacked together to make up one state
+    INP_SHAPE = (H, W, NUM_STACKED_FRAMES)
+
+    REPLAY_BUFFER_SIZE = 500000  # max buffer size
+    MIN_BUFFER_SIZE = 50000  # minimum buffer size before commencing training
+    TARGET_UPDATE_PERIOD = 10000  # steps after which target model's weights are updated
+
+    EPS = 1.0
+    EPS_MIN = 0.1
+    EPS_CHANGE = (EPS - EPS_MIN) / REPLAY_BUFFER_SIZE
     GAMMA = 0.99
     BATCH_SIZE = 32
-    NUM_EPISODES = 5  # 3500
-    IMG_H = 84
-    IMG_W = 84
-    NUM_STACKED_FRAMES = 4  # no. of frames stacked together to make up one state
-    REPLAY_BUFFER_SIZE = 500000  # max buffer size
-    MIN_BUFFER_SIZE = 500  # 00  # minimum buffer size before commencing training
-    EPS = 0.6  # 1.0
-    EPS_MIN = 0.1
+    NUM_EPISODES = 3500
 
-    INP_SHAPE = (IMG_H, IMG_W, NUM_STACKED_FRAMES)
-
-    base_network = DQN(NUM_ACTIONS, INP_SHAPE)
-    target_network = DQN(NUM_ACTIONS, INP_SHAPE)
-    img_transformer = ImageTransformer(IMG_H, IMG_W)
+    base_network = DQN(INP_SHAPE, NUM_ACTIONS)
+    target_network = DQN(INP_SHAPE, NUM_ACTIONS)
+    img_transformer = ImageTransformer(H, W)
     replay_memory = ReplayMemory(
-        REPLAY_BUFFER_SIZE, IMG_H, IMG_W, BATCH_SIZE, NUM_STACKED_FRAMES
+        REPLAY_BUFFER_SIZE, H, W, NUM_STACKED_FRAMES, BATCH_SIZE
     )
 
     # Populate replay buffer with episodes of completely random actions
-    for _ in range(MIN_BUFFER_SIZE):  # why populate & random ????
-        action = np.random.choice(env.action_space.n)
+    for _ in range(MIN_BUFFER_SIZE):
+        action = np.random.choice(NUM_ACTIONS)
         obs, reward, terminated, truncated, info = env.step(action)
         frame = img_transformer.transform(obs)
         replay_memory.add_experience(action, frame, reward, terminated or truncated)
@@ -51,27 +51,39 @@ if __name__ == "__main__":
             env.reset()
 
     step_count = 0
-    rewards_per_episode, steps_per_episode = [], []
+    steps_per_episode = []
+    rewards_per_episode = []
     # Play episodes
     for i in range(NUM_EPISODES):
-        duration, loss, episode_reward, num_episode_steps, step_count = play_episode(
+        duration, episode_reward, num_episode_steps, step_count, EPS = play_episode(
             env,
             base_network,
             target_network,
             img_transformer,
             replay_memory,
             step_count,
-            NUM_STACKED_FRAMES,
-            GAMMA,
             EPS,
             EPS_MIN,
-        )
-
-        print(
-            f"episode {i+1} | episode duration: {duration} sec. | loss: {loss} | reward: {episode_reward} | steps: {num_episode_steps}"
+            EPS_CHANGE,
+            NUM_STACKED_FRAMES,
+            GAMMA,
+            TARGET_UPDATE_PERIOD,
         )
 
         rewards_per_episode.append(episode_reward)
         steps_per_episode.append(num_episode_steps)
 
+        print(
+            f"Episode {i+1} | "
+            f"Steps: {num_episode_steps} | "
+            f"Reward: {episode_reward} | "
+            f"Epsilon: {EPS:.4f} | "
+            f"Duration: {duration:.2f} sec.| "
+            f"Avg. reward (last 100 episodes): {smooth(rewards_per_episode)[-1]:.2f} | "
+            f"Total steps: {step_count}"
+        )
+
+    # Save model for inference
+    base_network.save("model.h5")
+    # Plot results
     plot_results(rewards_per_episode, steps_per_episode)
