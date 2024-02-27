@@ -1,15 +1,16 @@
 import numpy as np
 import tensorflow as tf
 from keras.models import Sequential
-from keras.layers import Input, Conv2D, Flatten, Dense
+from keras.layers import Input, Rescaling, Conv2D, Flatten, Dense
 from keras.optimizers import Adam
 from keras.losses import Huber
 
 
 class DQN:
-    def __init__(self, num_actions, inp_shape, lr=1e-5):
+    def __init__(self, inp_shape=(84, 84, 4), num_actions=4, lr=1e-5):
         model = Sequential()
         model.add(Input(shape=inp_shape))
+        model.add(Rescaling(scale=1.0 / 255))
         model.add(Conv2D(32, kernel_size=(8, 8), strides=(4, 4), activation="relu"))
         model.add(Conv2D(64, kernel_size=(4, 4), strides=(2, 2), activation="relu"))
         model.add(Conv2D(64, kernel_size=(3, 3), strides=(1, 1), activation="relu"))
@@ -22,37 +23,37 @@ class DQN:
         self.optimizer = Adam(learning_rate=lr)
         self.huber_loss = Huber()
 
-    def loss_fn(self, action_probs, actions, targets):
+    def predict(self, states):
+        return self.model(states)
+
+    def compute_loss(self, preds, actions, target_Qvals):
         # print(f"action_probs.shape: {action_probs.shape}")
-        estimated_qvals = tf.reduce_sum(
-            tf.multiply(action_probs, tf.one_hot(actions, depth=self.num_actions)),
+        pred_Qvals = tf.reduce_sum(
+            preds * tf.one_hot(actions, depth=self.num_actions),
             axis=1,
         )
         # print(f"estimated_qvals.shape: {estimated_qvals.shape}")
         # print(targets, estimated_qvals)
-        loss = self.huber_loss(targets, estimated_qvals)
+        loss = self.huber_loss(target_Qvals, pred_Qvals)
         # print(f"loss.shape: {loss.shape}")
         # print(f"loss: {loss}")
         return loss
 
-    def update(self, states, actions, targets):
+    def update(self, states, actions, target_Qvals):
         with tf.GradientTape() as t:
-            action_probs = self.predict(states)
-            loss = self.loss_fn(action_probs, actions, targets)
-        self.optimizer.minimize(
-            loss=loss, var_list=self.model.trainable_weights, tape=t
-        )
+            preds = self.predict(states)
+            loss = self.compute_loss(preds, actions, target_Qvals)
+        # Derive gradients
+        gradients = t.gradient(loss, self.model.trainable_weights)
+        # Apply gradients
+        self.optimizer.apply_gradients(zip(gradients, self.model.trainable_weights))
         return loss
-
-    def predict(self, states):
-        # print(states.shape)
-        return self.model(states)  # returns p(a| s)
 
     def sample_action(self, state, eps):
         if np.random.random() < eps:
             return np.random.choice(self.num_actions)
         else:
-            return np.argmax(self.predict(np.expand_dims(state, axis=0)))  #
+            return np.argmax(self.predict(np.expand_dims(state, axis=0)))
 
-    def copy_weights(self, base_model):
-        self.model.set_weights(base_model.get_weights())
+    def copy_weights(self, m):
+        self.model.set_weights(m.get_weights())
