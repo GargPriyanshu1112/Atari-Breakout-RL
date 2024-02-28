@@ -33,7 +33,7 @@ if __name__ == "__main__":
     BATCH_SIZE = 32
     NUM_EPISODES = 3500
 
-    base_network = DQN(INP_SHAPE, NUM_ACTIONS)
+    main_network = DQN(INP_SHAPE, NUM_ACTIONS)
     target_network = DQN(INP_SHAPE, NUM_ACTIONS)
     img_transformer = ImageTransformer(H, W)
     replay_memory = ReplayMemory(
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     for i in range(NUM_EPISODES):
         duration, episode_reward, num_episode_steps, step_count, EPS = play_episode(
             env,
-            base_network,
+            main_network,
             target_network,
             img_transformer,
             replay_memory,
@@ -84,6 +84,6 @@ if __name__ == "__main__":
         )
 
     # Save model for inference
-    base_network.save("model.h5")
+    main_network.model.save("model.keras")
     # Plot results
     plot_results(rewards_per_episode, steps_per_episode)
