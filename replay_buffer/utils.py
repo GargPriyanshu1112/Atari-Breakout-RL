@@ -34,6 +34,7 @@ def plot_results(episode_rewards, episode_steps):
     plt.xlabel("Episodes")
     plt.ylabel("Step Count")
     plt.plot(smoothed_step_count)
+    plt.savefig("results.png")
     plt.show()
 
 
