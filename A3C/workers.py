@@ -1,7 +1,6 @@
 import threading
 import numpy as np
 import tensorflow as tf
-from keras.optimizers import RMSprop
 import tensorflow_probability as tfp
 
 from step import Step
@@ -27,6 +26,8 @@ class Worker:
         self,
         name,
         global_network,
+        actor_opt,
+        critic_opt,
         global_step_counter,
         rewards_list,
         discount_factor=0.99,
@@ -34,6 +35,8 @@ class Worker:
     ):
         self.name = name
         self.global_network = global_network
+        self.actor_opt = actor_opt
+        self.critic_opt = critic_opt
         self.global_step_counter = global_step_counter
         self.rewards_list = rewards_list
         self.discount_factor = discount_factor
@@ -45,9 +48,6 @@ class Worker:
 
         self.state = None  # tracks current state
         self.episode_reward = 0  # tracks episode reward
-
-        self.actor_opt = RMSprop(0.00025, 0.99, 0.0, 1e-6)
-        self.critic_opt = RMSprop(0.00025, 0.99, 0.0, 1e-6)
 
         self.lock1 = threading.Lock()
         self.lock2 = threading.Lock()

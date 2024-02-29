@@ -2,6 +2,7 @@ import itertools
 import threading
 import multiprocessing
 import tensorflow as tf
+from keras.optimizers import RMSprop
 
 from networks import ActorCritic
 from workers import Worker
@@ -18,6 +19,12 @@ from config import (
 if __name__ == "__main__":
     global_network = ActorCritic(INP_SHAPE, NUM_ACTIONS)
 
+    # Instantiate global optimizers (shared among workers)
+    actor_opt = RMSprop(0.00025, 0.99, 0.0, 1e-6)
+    actor_opt.build(global_network.actor.trainable_weights)
+    critic_opt = RMSprop(0.00025, 0.99, 0.0, 1e-6)
+    critic_opt.build(global_network.critic.trainable_weights)
+
     rewards_list = []  # stores rewards achieved by each individual worker
     global_step_counter = itertools.count()
     coordinator = tf.train.Coordinator()  # threads coordinator
@@ -28,6 +35,8 @@ if __name__ == "__main__":
         worker = Worker(
             f"worker_#{worker_id+1}",
             global_network,
+            actor_opt,
+            critic_opt,
             global_step_counter,
             rewards_list,
             DISCOUNT_FACTOR,

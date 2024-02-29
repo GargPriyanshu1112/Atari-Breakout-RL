@@ -1,7 +1,6 @@
 import tensorflow as tf
 from keras.models import Model
 from keras.layers import Input, Rescaling, Conv2D, Flatten, Dense
-from keras.optimizers import RMSprop
 
 
 class ActorCritic:
