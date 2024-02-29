@@ -1,25 +1,33 @@
 import gym
 import numpy as np
+import matplotlib.pyplot as plt
 
-from config import NUM_STACKED_FRAMES
 
-
-# Returns Breakout environment
 def get_breakout_env():
-    return gym.make(
-        id="ALE/Breakout-v5",
-        full_action_space=False,
-        repeat_action_probability=0.1,
-        obs_type="rgb",
-    )
+    # https://www.gymlibrary.dev/environments/atari/index.html
+    return gym.make("Breakout-v0")
 
 
-# Creates initial state by repeating the first frame 'NUM_STACKED_FRAMES' times
-def repeat_frame(frame):
-    return np.stack([frame] * NUM_STACKED_FRAMES, axis=-1)
+def smooth(x):
+    """
+    Returns average over last 100 episodes
+    """
+    x = np.array(x)  # list -> numpy array
+    n = len(x)
+    y = np.zeros(n)
+    for i in range(n):
+        start = max(0, i - 99)
+        y[i] = float(x[start : (i + 1)].sum()) / (i - start + 1)
+    return y
 
 
-# Returns next state by shifting each frame by 1. Removes the oldest frame from
-# the state and concatenates the latest frame to its other end.
-def get_next_state(state, frame):
-    return np.append(state[:, :, 1:], np.expand_dims(frame, axis=-1), axis=-1)
+def plot_results(rewards):
+    smoothed_rewards = smooth(rewards)
+
+    plt.title("Episodes vs Rewards")
+    plt.xlabel("Episodes")
+    plt.ylabel("Rewards")
+    plt.plot(rewards)
+    plt.plot(smoothed_rewards)
+    plt.savefig("results.png")
+    plt.show()
