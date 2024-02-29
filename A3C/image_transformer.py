@@ -8,7 +8,7 @@ class ImageTransformer:
 
     def transform(self, img):
         img = tf.image.rgb_to_grayscale(img)
-        img = tf.image.crop_to_bounding_box(img, 35, 0, 160, 160)
+        img = tf.image.crop_to_bounding_box(img, 34, 0, 160, 160)
         img = tf.image.resize(
             img,
             size=(self.h, self.w),
