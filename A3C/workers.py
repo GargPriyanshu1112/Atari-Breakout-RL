@@ -1,99 +1,116 @@
+import threading
 import numpy as np
 import tensorflow as tf
+from keras.optimizers import RMSprop
+import tensorflow_probability as tfp
 
-from image_transformer import ImageTransformer
-from networks import get_networks
-from utils import get_breakout_env, repeat_frame, get_next_state
 from step import Step
-from config import INP_SHAPE, NUM_ACTIONS
+from networks import ActorCritic
+from utils import get_breakout_env
+from image_transformer import ImageTransformer
+from config import NUM_ACTIONS, NUM_STACKED_FRAMES
+
+
+# Creates initial state by repeating the first frame 'NUM_STACKED_FRAMES' times
+def repeat_frame(frame):
+    return np.stack([frame] * NUM_STACKED_FRAMES, axis=-1)
+
+
+# Returns next state by shifting each frame by 1. Removes the oldest frame from
+# the state and concatenates the latest frame to its other end.
+def get_next_state(state, frame):
+    return np.append(state[:, :, 1:], np.expand_dims(frame, axis=-1), axis=-1)
 
 
 class Worker:
     def __init__(
         self,
         name,
-        steps_counter,
-        global_value_network,
-        global_policy_network,
-        returns_list,
+        global_network,
+        global_step_counter,
+        rewards_list,
         discount_factor=0.99,
         max_steps=5e6,
     ):
         self.name = name
-        self.steps_counter = steps_counter
-        self.global_value_network = global_value_network
-        self.global_policy_network = global_policy_network
-        self.returns_list = returns_list
+        self.global_network = global_network
+        self.global_step_counter = global_step_counter
+        self.rewards_list = rewards_list
         self.discount_factor = discount_factor
         self.max_steps = max_steps
 
-        self.state = None  # tracks current state
-        self.episode_reward = 0  # tracks total episode reward
         self.env = get_breakout_env()
+        self.worker_network = ActorCritic()
         self.img_transformer = ImageTransformer()
-        self.worker_value_network, self.worker_policy_network = get_networks(
-            INP_SHAPE, NUM_ACTIONS
-        )
+
+        self.state = None  # tracks current state
+        self.episode_reward = 0  # tracks episode reward
+
+        self.actor_opt = RMSprop(0.00025, 0.99, 0.0, 1e-6)
+        self.critic_opt = RMSprop(0.00025, 0.99, 0.0, 1e-6)
+
+        self.lock1 = threading.Lock()
+        self.lock2 = threading.Lock()
 
     def copy_global_weights(self):
-        """Copies weights from global value and policy models to the worker counterparts."""
-        self.worker_value_network.model.set_weights(
-            self.global_value_network.model.get_weights()
-        )
-        self.worker_policy_network.model.set_weights(
-            self.global_policy_network.model.get_weights()
-        )
+        """Copies global Actor & Critic weights to the worker counterparts."""
+        self.worker_network.actor.set_weights(self.global_network.actor.get_weights())
+        self.worker_network.critic.set_weights(self.global_network.critic.get_weights())
 
     def update_global_weights(self, states, actions, advantages, value_targets):
-        """Updates weights of global value and policy models with gradients from the worker counterparts."""
+        """Updates global Actor and Critic weights with gradients from worker counterparts."""
         with tf.GradientTape() as t:
-            preds = self.worker_value_network.predict(states)
-            loss = self.worker_value_network.loss_fn(value_targets, preds)
-        gradients = t.gradient(loss, self.worker_value_network.model.trainable_weights)
-        gradients, _ = tf.clip_by_global_norm(gradients, 5.0)  # gradient clipping
-        self.global_value_network.optimizer.apply_gradients(
-            zip(gradients, self.global_value_network.model.trainable_weights)
+            action_probs = self.worker_network.get_action_probs(states)  # p(a| s)
+            chosen_action_probs = tf.reduce_sum(
+                action_probs * tf.one_hot(actions, depth=NUM_ACTIONS), axis=1
+            )
+            loss = self.worker_network.actor_loss_fn(
+                action_probs, chosen_action_probs, advantages
+            )
+        grads = t.gradient(loss, self.worker_network.actor.trainable_weights)
+        grads, _ = tf.clip_by_global_norm(grads, 5.0)  # gradient clipping
+        self.actor_opt.apply_gradients(
+            zip(grads, self.global_network.actor.trainable_weights)
         )
 
         with tf.GradientTape() as t:
-            action_probs = self.worker_policy_network.get_probs(states)  # p(a| s)
-            selected_action_probs = tf.reduce_sum(
-                tf.multiply(action_probs, tf.one_hot(actions, depth=4)), axis=1
-            )
-            loss = self.worker_policy_network.loss_fn(
-                action_probs, selected_action_probs, advantages
-            )
-        gradients = t.gradient(loss, self.worker_policy_network.model.trainable_weights)
-        gradients, _ = tf.clip_by_global_norm(gradients, 5.0)  # gradient clipping
-        self.global_policy_network.optimizer.apply_gradients(
-            zip(gradients, self.global_policy_network.model.trainable_weights)
+            preds = self.worker_network.get_v_estimate(states)
+            loss = self.worker_network.critic_loss_fn(value_targets, preds)
+        grads = t.gradient(loss, self.worker_network.critic.trainable_weights)
+        grads, _ = tf.clip_by_global_norm(grads, 5.0)  # gradient clipping
+        self.critic_opt.apply_gradients(
+            zip(grads, self.global_network.critic.trainable_weights)
         )
 
     def sample_action(self, state):
-        return self.worker_policy_network.sample_action(np.array(state))
+        """Decides which action a worker will choose."""
+        logits = self.worker_network.actor(np.array(state))
+        distibution = tfp.distributions.Categorical(logits=logits)
+        action = distibution.sample()[0]
+        return action
 
     def run_n_steps(self, n):
         steps_data = []
-        # Take n steps
+
         for _ in range(n):
-            action = self.sample_action([self.state])
+            action = self.sample_action([self.state])  # Always starts at initial state
 
             obs, reward, terminated, truncated, _ = self.env.step(action)
             next_state = get_next_state(self.state, self.img_transformer.transform(obs))
 
             if terminated or truncated:  # if episode ends
                 print(f"Episode Reward: {self.episode_reward} - {self.name}")
-                self.returns_list.append(self.episode_reward)
+                self.rewards_list.append(self.episode_reward)
                 self.episode_reward = 0  # reset
-                if len(self.returns_list) % 100 == 0:
+                if len(self.rewards_list) > 0 and len(self.rewards_list) % 100 == 0:
                     print(
-                        f"\nAvg. reward (last 100 episodes): {np.mean(self.returns_list[-100:])}\n"
+                        f"\nAvg. reward (last 100 episodes): {np.mean(self.rewards_list[-100:])}\n"
                     )
             else:  # if episode hasn't ended
                 self.episode_reward += reward
 
             # Update step counter
-            num_global_steps = next(self.steps_counter)
+            num_global_steps = next(self.global_step_counter)
 
             # Store step data
             step = Step(self.state, action, reward, next_state, terminated or truncated)
@@ -112,12 +129,16 @@ class Worker:
     def run(self, coordinator, steps_before_update):
         # Start state
         self.state = repeat_frame(self.img_transformer.transform(self.env.reset()[0]))
-        assert self.state.ndim == 3  # state.shape == (84, 84, 4)
 
         try:
             while not coordinator.should_stop():
-                # Copy weights from global value and policy models to the worker counterparts
-                self.copy_global_weights()
+                # Acquire the lock before entering the critical section
+                self.lock1.acquire()
+                try:
+                    self.copy_global_weights()
+                finally:
+                    # Release the lock
+                    self.lock1.release()
 
                 # Collect experience
                 steps_data, num_global_steps = self.run_n_steps(steps_before_update)
@@ -126,20 +147,24 @@ class Worker:
                     coordinator.request_stop()
                     return
 
-                # Update global value and policy models' weights using worker counterparts' gradients
-                self.update(steps_data)
+                # Acquire the lock before entering the critical section
+                self.lock2.acquire()
+                try:
+                    self.learn(steps_data)
+                finally:
+                    # Release the lock
+                    self.lock2.release()
 
         except tf.errors.CancelledError:
             return
 
-    def get_value_estimate(self, state):
-        return self.worker_value_network.predict(np.array(state))
-
-    def update(self, steps_data):
-        if not steps_data[-1].done_flag:  # if the episode hasn't ended
-            # Expected sum of all future rewards
-            V_s_prime = self.get_value_estimate([steps_data[-1].next_state])
-        else:  # if the episode has ended
+    def learn(self, steps_data):
+        # If episode hasn't ended, get expected sum of all future rewards
+        if not steps_data[-1].done_flag:
+            s_prime = np.expand_dims(steps_data[-1].next_state, axis=0)
+            V_s_prime = self.worker_network.get_v_estimate(s_prime)
+        else:
+            # If episode has ended, there will be no future rewards
             V_s_prime = 0.0
 
         states = []
@@ -153,16 +178,22 @@ class Worker:
                G(s2) = r2 + r3 + V(s4)        (= r2 + G(s3))
                G(s1) = r1 + r2 + r3 + V(s4)   (= r1 + G(s2))
         """
-        # Loop through steps in reverse order
+        # Accumulated data for training batch
         for step_data in reversed(steps_data):
-            return_ = step_data.reward + self.discount_factor * V_s_prime
-            advantage = return_ - self.get_value_estimate([step_data.state])
-            V_s_prime = return_
+            # Get return
+            G = step_data.reward + self.discount_factor * V_s_prime
+            # Get V(s)
+            s = np.expand_dims(step_data.state, axis=0)
+            V_s = self.worker_network.get_v_estimate(s)
+            # Get advantage
+            advantage = G - V_s
+
+            V_s_prime = G
 
             states.append(step_data.state)
             actions.append(step_data.action)
             advantages.append(advantage)
-            value_targets.append(return_)
+            value_targets.append(G)
 
         self.update_global_weights(
             np.array(states), actions, np.array(advantages), value_targets

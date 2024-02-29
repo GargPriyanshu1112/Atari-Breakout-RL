@@ -1,14 +1,11 @@
-"""
-When to close env...
-"""
-
 import itertools
 import threading
 import multiprocessing
 import tensorflow as tf
 
-from networks import get_networks
+from networks import ActorCritic
 from workers import Worker
+from utils import plot_results
 from config import (
     INP_SHAPE,
     NUM_ACTIONS,
@@ -19,26 +16,26 @@ from config import (
 
 
 if __name__ == "__main__":
-    # Global value and policy networks
-    value_network, policy_network = get_networks(INP_SHAPE, NUM_ACTIONS)
+    global_network = ActorCritic(INP_SHAPE, NUM_ACTIONS)
 
-    returns_list = []
-    steps_counter = itertools.count()
+    rewards_list = []  # stores rewards achieved by each individual worker
+    global_step_counter = itertools.count()
     coordinator = tf.train.Coordinator()  # threads coordinator
 
+    # Create workers
     workers = []
     for worker_id in range(multiprocessing.cpu_count()):
         worker = Worker(
             f"worker_#{worker_id+1}",
-            steps_counter,
-            value_network,
-            policy_network,
-            returns_list,
+            global_network,
+            global_step_counter,
+            rewards_list,
             DISCOUNT_FACTOR,
             MAX_STEPS,
         )
         workers.append(worker)
 
+    # Start worker threads
     worker_threads = []
     for worker in workers:
         worker_func = lambda: worker.run(coordinator, STEPS_BEFORE_UPDATE)
@@ -51,4 +48,7 @@ if __name__ == "__main__":
         worker_threads, stop_grace_period_secs=300
     )  # raises error if threads don't terminate within 5 minutes
 
-    # Add plot function
+    # Save model for inference
+    global_network.actor.save("model.keras")
+    # Plot results
+    plot_results(rewards_list)
