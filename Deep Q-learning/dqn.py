@@ -27,16 +27,11 @@ class DQN:
         return self.model(states)
 
     def compute_loss(self, preds, actions, target_Qvals):
-        # print(f"action_probs.shape: {action_probs.shape}")
         pred_Qvals = tf.reduce_sum(
             preds * tf.one_hot(actions, depth=self.num_actions),
             axis=1,
         )
-        # print(f"estimated_qvals.shape: {estimated_qvals.shape}")
-        # print(targets, estimated_qvals)
         loss = self.huber_loss(target_Qvals, pred_Qvals)
-        # print(f"loss.shape: {loss.shape}")
-        # print(f"loss: {loss}")
         return loss
 
     def update(self, states, actions, target_Qvals):

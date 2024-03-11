@@ -13,17 +13,13 @@ def get_next_state(state, frame):
 def learn(main_network, target_network, replay_memory, gamma):
     # Get train batch
     states, actions, rewards, next_states, done_flags = replay_memory.get_batch()
-    # print(
-    #     states.shape, actions.shape, rewards.shape, next_states.shape, done_flags.shape
-    # )
 
     # Get the target
     next_Qvals = target_network.predict(next_states)
-    # print(f"pred_Qs shape: {pred_Qs.shape}")
     nextQs = np.max(next_Qvals, axis=1)
-    # print(f"maxQs shape: {maxQs.shape}")
     targets = rewards + np.invert(done_flags).astype(np.float32) * gamma * nextQs
-    # print(f"targets shape: {targets.shape}")
+
+    # Update weights
     loss = main_network.update(states, actions, targets)
     return loss
 
