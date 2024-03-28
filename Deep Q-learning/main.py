@@ -31,7 +31,7 @@ if __name__ == "__main__":
     EPS_CHANGE = (EPS - EPS_MIN) / REPLAY_BUFFER_SIZE
     GAMMA = 0.99
     BATCH_SIZE = 32
-    NUM_EPISODES = 3500
+    NUM_EPISODES = 1725  # 3500
 
     main_network = DQN(INP_SHAPE, NUM_ACTIONS)
     target_network = DQN(INP_SHAPE, NUM_ACTIONS)
